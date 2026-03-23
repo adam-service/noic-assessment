@@ -81,6 +81,14 @@ body{font-family:"Hiragino Kaku Gothic ProN","Meiryo",sans-serif;background:var(
 .multi-checks label.mc-fuka{background:#888;border-color:transparent;color:#FFF}
 .multi-checks input[type="checkbox"]{display:none}
 .multi-hint{font-size:10px;color:var(--sub);margin-bottom:4px;line-height:1.5}
+/* Stepped selection (フクダ・タンデム: 方向→程度の2段階) */
+.stepped-dir{margin-bottom:4px}
+.stepped-deg{margin-bottom:4px;display:none;padding:6px 0 0 10px;border-left:3px solid var(--accent-light)}
+.stepped-deg.open{display:block}
+.stepped-deg-hint{font-size:10px;color:var(--sub);margin-bottom:4px}
+.stepped-extras{margin-top:4px;margin-bottom:4px;display:flex;flex-wrap:wrap;gap:8px}
+.stepped-extras label{font-size:11px;color:var(--sub);cursor:pointer;display:flex;align-items:center;gap:4px}
+.stepped-extras input[type="checkbox"]{accent-color:var(--accent)}
 /* Memo */
 .memo-input{width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;color:var(--text);background:#FAFAFA;outline:none;resize:none;line-height:1.4;transition:.2s}
 .memo-input:focus{border-color:var(--accent);background:#FFF}
@@ -409,19 +417,24 @@ const ITEMS=[
   {r:"前頭葉",s:"眼窩前頭皮質",n:"匂い当て（8回）",      d:"D4",mx:2,opts:[["8回",2],["7回",2],["6回",1],["5回",1],["4回以下",0],["評価不可",0]]},
   {r:"前頭葉",s:"前頭眼野",    n:"アンチサッケード",      d:"D4",mx:2,opts:[["6（合格ライン）",2],["5",1],["4以下",0],["評価不可",0]]},
   {r:"前頭葉",s:"背外側前頭前野",n:"No-Go",              d:"D4",mx:2,opts:[["7以上",2],["6（合格ライン）",1],["5以下",0],["評価不可",0]]},
-  {r:"小脳",  s:"前庭小脳",    n:"右VOR",                 d:"D5",mx:1,opts:[["良好",1],["課題あり",0],["評価不可",0]]},
-  {r:"小脳",  s:"前庭小脳",    n:"右上VOR",               d:"D5",mx:1,opts:[["良好",1],["課題あり",0],["評価不可",0]]},
-  {r:"小脳",  s:"前庭小脳",    n:"左下VOR",               d:"D5",mx:1,opts:[["良好",1],["課題あり",0],["評価不可",0]]},
-  {r:"小脳",  s:"前庭小脳",    n:"左VOR",                 d:"D5",mx:1,opts:[["良好",1],["課題あり",0],["評価不可",0]]},
-  {r:"小脳",  s:"前庭小脳",    n:"左上VOR",               d:"D5",mx:1,opts:[["良好",1],["課題あり",0],["評価不可",0]]},
-  {r:"小脳",  s:"前庭小脳",    n:"右下VOR",               d:"D5",mx:1,opts:[["良好",1],["課題あり",0],["評価不可",0]]},
+  {r:"小脳",  s:"前庭小脳（右外側半規管）",n:"右VOR",       d:"D5",mx:1,opts:[["良好",1],["課題あり",0],["評価不可",0]]},
+  {r:"小脳",  s:"前庭小脳（右前半規管）",n:"右上VOR",      d:"D5",mx:1,opts:[["良好",1],["課題あり",0],["評価不可",0]]},
+  {r:"小脳",  s:"前庭小脳（左後半規管）",n:"左下VOR",      d:"D5",mx:1,opts:[["良好",1],["課題あり",0],["評価不可",0]]},
+  {r:"小脳",  s:"前庭小脳（左外側半規管）",n:"左VOR",      d:"D5",mx:1,opts:[["良好",1],["課題あり",0],["評価不可",0]]},
+  {r:"小脳",  s:"前庭小脳（左前半規管）",n:"左上VOR",      d:"D5",mx:1,opts:[["良好",1],["課題あり",0],["評価不可",0]]},
+  {r:"小脳",  s:"前庭小脳（右後半規管）",n:"右下VOR",      d:"D5",mx:1,opts:[["良好",1],["課題あり",0],["評価不可",0]]},
   {r:"小脳",  s:"前庭小脳",    n:"水平注視",              d:"D5",mx:2,opts:[["良好",2],["右",1],["左",1],["評価不可",0]]},
   {r:"小脳",  s:"前庭小脳",    n:"傾き注視",              d:"D5",mx:2,opts:[["良好",2],["右",1],["左",1],["評価不可",0]]},
   {r:"小脳",  s:"前庭小脳",    n:"傾きジャンプ注視",      d:"D5",mx:2,opts:[["良好",2],["右",1],["左",1],["評価不可",0]]},
   {r:"小脳",  s:"脊髄小脳",    n:"ロンバーグ（タップ）",  d:"D5",mx:2,opts:[["良好",2],["右",1],["左",1],["評価不可",0]]},
-  {r:"小脳",  s:"脊髄小脳",    n:"タンデムウォーク",      d:"D5",mx:2,opts:[["良好",2],["右",1],["左",1],["評価不可",0]]},
+  {r:"小脳",  s:"脊髄小脳",    n:"タンデムウォーク",      d:"D5",mx:2,
+    stepped:{dirs:[{l:"良好",s:2},{l:"右",s:null},{l:"左",s:null},{l:"評価不可",s:0}],
+      degs:[{l:"やや偏る",s:1},{l:"大きく偏る",s:0}]}},
   {r:"小脳",  s:"脊髄小脳",    n:"片足立ち（閉眼）",      d:"D5",mx:2,opts:[["良好（15秒以上）",2],["右",1],["左",1],["評価不可",0]]},
-  {r:"小脳",  s:"脊髄小脳",    n:"フクダステップ",        d:"D5",mx:2,opts:[["良好（30°未満）",2],["右",1],["左",1],["評価不可",0]]},
+  {r:"小脳",  s:"脊髄小脳",    n:"フクダステップ",        d:"D5",mx:2,
+    stepped:{dirs:[{l:"良好（旋回30°未満）",s:2},{l:"右旋回",s:null},{l:"左旋回",s:null},{l:"評価不可",s:0}],
+      degs:[{l:"やや偏る（30°〜45°程度）",s:1},{l:"大きく偏る（45°以上）",s:0}],
+      extras:["前方移動あり"]}},
   {r:"小脳",  s:"大脳小脳",    n:"パタパタ",              d:"D5",mx:2,opts:[["良好",2],["右",1],["左",1],["両方",0],["評価不可",0]]},
   {r:"小脳",  s:"大脳小脳",    n:"バイバイ",              d:"D5",mx:2,opts:[["良好",2],["右",1],["左",1],["両方",0],["評価不可",0]]},
   {r:"小脳",  s:"大脳小脳",    n:"指鼻テスト",            d:"D5",mx:2,opts:[["良好",2],["右",1],["左",1],["両方",0],["評価不可",0]]},
@@ -433,7 +446,7 @@ const ITEMS=[
   {r:"後頭葉",s:"斜位",        n:"カバーアンカバー（斜位）",d:"D6",mx:1,opts:[["良好",1],["右外斜位",0],["左外斜位",0],["右内斜位",0],["左内斜位",0],["評価不可",0]]},
   {r:"後頭葉",s:"両眼視",      n:"ブロックストリングス",  d:"D6",mx:1,opts:[["良好",1],["片目抑制",0],["評価不可",0]]},
   {r:"後頭葉",s:"周辺視",      n:"周辺視テスト",          d:"D6",mx:2,opts:[["良好（100°以上）",2],["90〜99°",1],["90°以下",0],["評価不可",0]]},
-  {r:"島皮質",s:"内受容感覚",  n:"エアハンガードリル",    d:"D8",mx:2,opts:[["良好（25秒以上）",2],["15〜24秒",1],["15秒未満",0],["評価不可",0]]},
+  {r:"島皮質",s:"内受容感覚",  n:"エアハンガードリル",    d:"D8",mx:2,opts:[["良好（BOLT 25秒以上）",2],["やや（15〜24秒）",1],["明確（15秒未満）",0],["評価不可",0]]},
   {r:"島皮質",s:"内受容感覚",  n:"心拍カウント",          d:"D8",mx:2,opts:[["良好（±2以下）",2],["±3〜5",1],["±6以上",0],["評価不可",0]]},
   {r:"迷走神経",s:"自律神経末梢",n:"パルスオキシメーター",d:"D8",mx:2,opts:[["良好",2],["課題あり",0],["評価不可",0]]},
   {r:"迷走神経",s:"自律神経末梢",n:"爪チェック",          d:"D8",mx:1,opts:[["良好",1],["右",0],["左",0],["両方",0],["評価不可",0]]},
@@ -505,13 +518,17 @@ const RESYNC_ITEMS=[
     opts:[["問題なし",2],["右残存",1],["左残存",1],["両側残存",0],["未実施",-1]]},
 
   // ── D5 バランス（3項目）──
-  // フクダステップは回転方向・前後偏位が分析の核
+  // フクダステップ: 方向→程度の2段階選択。前方移動は参考記録（スコアに影響しない）
   {r:"バランス",s:"バランス",n:"フクダステップ",d:"D5",mx:2,
-    opts:[["問題なし（30°未満）",2],["右回転",1],["左回転",1],["前方偏位",1],["右前方回転",0],["左前方回転",0],["未実施",-1]]},
+    stepped:{dirs:[{l:"問題なし（旋回30°未満）",s:2},{l:"右旋回",s:null},{l:"左旋回",s:null},{l:"未実施",s:-1}],
+      degs:[{l:"やや偏る（30°〜45°程度）",s:1},{l:"大きく偏る（45°以上）",s:0}],
+      extras:["前方移動あり"]}},
   {r:"バランス",s:"バランス",n:"タンデムウォーク開眼",d:"D5",mx:2,
-    opts:[["問題なし",2],["右へ偏る",1],["左へ偏る",1],["大きく偏る",0],["未実施",-1]]},
+    stepped:{dirs:[{l:"問題なし",s:2},{l:"右",s:null},{l:"左",s:null},{l:"未実施",s:-1}],
+      degs:[{l:"やや偏る",s:1},{l:"大きく偏る",s:0}]}},
   {r:"バランス",s:"バランス",n:"タンデムウォーク閉眼",d:"D5",mx:2,
-    opts:[["問題なし",2],["右へ偏る",1],["左へ偏る",1],["大きく偏る",0],["未実施",-1]]},
+    stepped:{dirs:[{l:"問題なし",s:2},{l:"右",s:null},{l:"左",s:null},{l:"未実施",s:-1}],
+      degs:[{l:"やや偏る",s:1},{l:"大きく偏る",s:0}]}},
 
   // ── D6 ビジョン（5項目）──
   // パスートは方向ごとに滑らかさが異なる
@@ -522,9 +539,11 @@ const RESYNC_ITEMS=[
     opts:[["問題なし",2],["右オーバー",1],["右アンダー",1],["左オーバー",1],["左アンダー",1],["両側エラー",0],["未実施",-1]]},
   {r:"ビジョン",s:"ビジョン",n:"輻輳",d:"D6",mx:2,
     opts:[["問題なし",2],["右",1],["左",1],["両方",0],["未実施",-1]]},
-  // VORは左右どちらの前庭小脳に問題があるか
-  {r:"ビジョン",s:"ビジョン",n:"VOR",d:"D6",mx:2,
-    opts:[["問題なし",2],["右エラー",1],["左エラー",1],["両方エラー",0],["未実施",-1]]},
+  // VOR: 半規管別にエラーをチェック（複数選択可）
+  {r:"ビジョン",s:"ビジョン",n:"VOR（半規管別）",d:"D6",mx:2,
+    multi:true,multiScoring:[0,2],
+    checks:["右外側半規管","右前半規管","右後半規管","左外側半規管","左前半規管","左後半規管","未実施"],
+    multiHint:"エラーのある半規管をすべて選択（0個→2点 / 1〜2個→1点 / 3個以上→0点）"},
   // ブロックストリングスはどちらの眼が抑制されているか
   {r:"ビジョン",s:"ビジョン",n:"ブロックストリングス",d:"D6",mx:2,
     opts:[["問題なし",2],["右目抑制",0],["左目抑制",0],["未実施",-1]]},
@@ -537,7 +556,7 @@ const RESYNC_ITEMS=[
   {r:"呼吸",s:"呼吸",n:"呼吸パターン",d:"D7",mx:2,
     opts:[["問題なし",2],["胸式優位",1],["逆腹式",0],["浅い",1],["未実施",-1]]},
   {r:"呼吸",s:"呼吸",n:"エアハンガー",d:"D7",mx:2,
-    opts:[["問題なし",2],["軽度あり",1],["明確にあり",0],["未実施",-1]]},
+    opts:[["問題なし（BOLT 25秒以上）",2],["やや（15〜24秒）",1],["明確（15秒未満）",0],["未実施",-1]]},
 ];
 
 const RESYNC_DOMAINS={
@@ -1059,13 +1078,37 @@ function buildItems(g,date){
     div.className="item";
 
     let optsHtml;
-    if(item.multi){
-      // 複数チェック式（固定視等）
+    if(item.stepped){
+      // 2段階選択式（フクダ・タンデム: 方向→程度）
+      const st=item.stepped;
+      const savedDir=saved.direction||"";
+      const savedDeg=saved.degree||"";
+      const savedExtras=saved.extras||[];
+      const needsDeg=savedDir&&st.dirs.find(d=>d.l===savedDir&&d.s===null);
+      optsHtml=`<div class="stepped-dir"><div class="opts">${st.dirs.map(d=>{
+        const sel=savedDir===d.l?"selected":"";
+        const sc2=d.s===null?"s1":d.s<0?"sx":d.s>=2?"s2":d.s>=1?"s1":"s0";
+        return`<div class="opt ${sc2} ${sel}" data-idx="${idx}" data-dir="${esc(d.l)}" data-dirscore="${d.s}" onclick="pickSteppedDir(this)">${esc(d.l)}</div>`;
+      }).join("")}</div></div>`;
+      optsHtml+=`<div class="stepped-deg${needsDeg?' open':''}" id="deg-${idx}"><div class="stepped-deg-hint">程度を選択：</div><div class="opts">${st.degs.map(d=>{
+        const sel=savedDeg===d.l?"selected":"";
+        const sc2=d.s>=1?"s1":"s0";
+        return`<div class="opt ${sc2} ${sel}" data-idx="${idx}" data-deg="${esc(d.l)}" data-degscore="${d.s}" onclick="pickSteppedDeg(this)">${esc(d.l)}</div>`;
+      }).join("")}</div></div>`;
+      if(st.extras&&st.extras.length){
+        optsHtml+=`<div class="stepped-extras">${st.extras.map(ex=>{
+          const chk=savedExtras.includes(ex)?" checked":"";
+          return`<label><input type="checkbox" data-idx="${idx}" data-extra="${esc(ex)}" onchange="pickSteppedExtra(this)"${chk}> ${esc(ex)}（参考記録）</label>`;
+        }).join("")}</div>`;
+      }
+    }else if(item.multi){
+      // 複数チェック式（固定視・VOR半規管別等）
       const checkedArr=saved.checked||[];
-      optsHtml=`<div class="multi-hint">エラー方向をすべて選択（0〜1個→2点 / 2〜3個→1点 / 4個以上→0点 / 評価不可→0点）</div>
+      const hint=item.multiHint||"エラー方向をすべて選択（0〜1個→2点 / 2〜3個→1点 / 4個以上→0点 / 評価不可→0点）";
+      optsHtml=`<div class="multi-hint">${hint}</div>
         <div class="multi-checks">${item.checks.map(val=>{
           const isChecked=checkedArr.includes(val);
-          const isFuka=val==="評価不可";
+          const isFuka=(val==="評価不可"||val==="未実施");
           const cls=isChecked?(isFuka?"mc-fuka":"mc-checked"):"";
           return`<label class="${cls}"><input type="checkbox" value="${esc(val)}" data-idx="${idx}" onchange="pickMulti(this)"${isChecked?" checked":""}>${esc(val)}</label>`;
         }).join("")}</div>`;
@@ -1140,11 +1183,84 @@ function pickOpt(el){
   updateRegionCount(item.r);
 }
 
-// 固定視スコア計算（mx:2）: エラー0〜1→2, 2〜3→1, 4以上or評価不可→0
-function calcMultiScore(checked){
+// ── 2段階選択ハンドラ（フクダ・タンデム）──
+function pickSteppedDir(el){
+  const idx=parseInt(el.dataset.idx);
+  const item=curItems()[idx];
+  const dirLabel=el.dataset.dir;
+  const ds=el.dataset.dirscore;
+  const dirScore=ds==="null"?null:parseInt(ds);
+  el.parentElement.querySelectorAll(".opt").forEach(o=>o.classList.remove("selected"));
+  el.classList.add("selected");
+  const degDiv=document.getElementById("deg-"+idx);
+  if(dirScore===null){
+    degDiv.classList.add("open");
+    const prevDeg=degDiv.querySelector(".opt.selected");
+    if(prevDeg){
+      const degScore=parseInt(prevDeg.dataset.degscore);
+      saveStepped(idx,item,dirLabel,null,prevDeg.dataset.deg,degScore);
+    }
+  }else{
+    degDiv.classList.remove("open");
+    degDiv.querySelectorAll(".opt").forEach(o=>o.classList.remove("selected"));
+    saveStepped(idx,item,dirLabel,dirScore,"",null);
+  }
+}
+function pickSteppedDeg(el){
+  const idx=parseInt(el.dataset.idx);
+  const item=curItems()[idx];
+  const degLabel=el.dataset.deg;
+  const degScore=parseInt(el.dataset.degscore);
+  el.parentElement.querySelectorAll(".opt").forEach(o=>o.classList.remove("selected"));
+  el.classList.add("selected");
+  const dirEl=el.closest(".item").querySelector(".stepped-dir .opt.selected");
+  const dirLabel=dirEl?dirEl.dataset.dir:"";
+  saveStepped(idx,item,dirLabel,null,degLabel,degScore);
+}
+function pickSteppedExtra(el){
+  const idx=parseInt(el.dataset.idx);
+  const item=curItems()[idx];
+  const g=store.guests[currentGid];if(!g)return;
+  const date=document.getElementById("assessDate").value;
+  const a=getAssessment(g,date);
+  const sv=a.items[item.n]||{};
+  const extras=[];
+  el.closest(".stepped-extras").querySelectorAll("input[type='checkbox']").forEach(cb=>{
+    if(cb.checked)extras.push(cb.dataset.extra);
+  });
+  sv.extras=extras;
+  a.items[item.n]=sv;
+  a.savedAt=nowIso();g.updatedAt=nowIso();
+  saveStore(store);
+}
+function saveStepped(idx,item,dirLabel,dirScore,degLabel,degScore){
+  const score=degScore!==null?degScore:dirScore;
+  const result=degLabel?`${dirLabel}・${degLabel}`:dirLabel;
+  const badge=document.getElementById("badge-"+idx);
+  badge.textContent=score<0?"除外":score;
+  badge.className="score-badge "+(score<0?"sx":"s"+Math.min(score,2));
+  const g=store.guests[currentGid];
+  const date=document.getElementById("assessDate").value;
+  const a=getAssessment(g,date);
+  const existing=a.items[item.n]||{};
+  a.items[item.n]={result,direction:dirLabel,degree:degLabel||"",extras:existing.extras||[],score};
+  a.savedAt=nowIso();g.updatedAt=nowIso();
+  calcScores(a);saveStore(store);
+  updateProgress();updateScoreBar();updateRegionCount(item.r);
+}
+
+// 複数チェックスコア計算: デフォルト 0-1→2, 2-3→1, 4+→0 / カスタム multiScoring 対応
+function calcMultiScore(checked,item){
   if(!checked||!checked.length)return null;
   if(checked.includes("評価不可"))return 0;
+  if(checked.includes("未実施"))return -1;
   const n=checked.length;
+  if(item&&item.multiScoring){
+    const[t1,t2]=item.multiScoring;
+    if(n<=t1)return item.mx||2;
+    if(n<=t2)return 1;
+    return 0;
+  }
   if(n<=1)return 2;
   if(n<=3)return 1;
   return 0;
@@ -1155,28 +1271,28 @@ function pickMulti(el){
   const container=el.closest(".multi-checks");
   const allCbs=container.querySelectorAll("input[type='checkbox']");
 
-  // 評価不可チェック時は他を解除、他チェック時は評価不可を解除
-  if(el.value==="評価不可"&&el.checked){
-    allCbs.forEach(cb=>{if(cb.value!=="評価不可")cb.checked=false;});
-  }else if(el.value!=="評価不可"&&el.checked){
-    const fuka=container.querySelector("input[value='評価不可']");
-    if(fuka)fuka.checked=false;
+  // 評価不可・未実施チェック時は他を解除、他チェック時は排他項目を解除
+  const isExcl=(el.value==="評価不可"||el.value==="未実施");
+  if(isExcl&&el.checked){
+    allCbs.forEach(cb=>{if(cb!==el)cb.checked=false;});
+  }else if(!isExcl&&el.checked){
+    allCbs.forEach(cb=>{if(cb.value==="評価不可"||cb.value==="未実施")cb.checked=false;});
   }
 
   // ラベルのスタイル更新
   allCbs.forEach(cb=>{
     const lbl=cb.parentElement;
-    const isFuka=cb.value==="評価不可";
+    const isFuka=(cb.value==="評価不可"||cb.value==="未実施");
     lbl.className=cb.checked?(isFuka?"mc-fuka":"mc-checked"):"";
   });
 
   const checked=Array.from(allCbs).filter(cb=>cb.checked).map(cb=>cb.value);
-  const score=calcMultiScore(checked);
+  const score=calcMultiScore(checked,item);
   const result=checked.join(", ");
 
   const badge=document.getElementById("badge-"+idx);
-  badge.textContent=score!=null?score:"—";
-  badge.className="score-badge"+(score!=null?" s"+Math.min(score,2):"");
+  badge.textContent=score!=null?(score<0?"除外":score):"—";
+  badge.className="score-badge"+(score!=null?(score<0?" sx":" s"+Math.min(score,2)):"");
 
   const g=store.guests[currentGid];
   const date=document.getElementById("assessDate").value;
@@ -1626,7 +1742,8 @@ function generateMarkdown(g,a){
     }
     const sv=a.items[item.n]||{};
     const memo=mdTableCell(a.memos?.[item.n]||"");
-    const result=sv.result||"未入力";
+    let result=sv.result||"未入力";
+    if(sv.extras&&sv.extras.length)result+="／"+sv.extras.join(", ");
     const score=sv.score!=null?(sv.score>=0?sv.score:"未実施"):"—";
     L.push(`| ${item.n} | ${item.s} | ${result} | ${score} | ${item.mx} | ${memo} |`);
   }
