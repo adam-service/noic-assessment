@@ -663,10 +663,10 @@ async function initFirebaseFromJson(){
     }
     const fs = firebase.firestore();
     // Safari・企業プロキシ等で WebChannel が落ちるときに効く（get / 同期の安定化）
+    // ※ AutoDetect と Force の併用は invalid-argument で設定ごと無効化されるため AutoDetect のみ
     try{
       fs.settings({
         experimentalAutoDetectLongPolling: true,
-        experimentalForceLongPolling: true,
       });
     }catch(e2){ console.warn("firestore.settings", e2); }
     // オフライン永続化: タブ休止・瞬断・リロードでも未送信の書き込みを失わない
