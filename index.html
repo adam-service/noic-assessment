@@ -247,6 +247,7 @@ body{font-family:"Hiragino Kaku Gothic ProN","Meiryo",sans-serif;background:var(
       <label>測定日</label>
       <input type="date" id="assessDate">
     </div>
+    <button class="btn btn-outline btn-sm" onclick="changeAssessDate()" title="このシートの測定日を変更（誤った日付で保存された場合の修正用）">日付変更</button>
     <button class="btn btn-outline btn-sm" onclick="expandAll()">全て開く</button>
     <button class="btn btn-outline btn-sm" onclick="collapseAll()">閉じる</button>
   </div>
@@ -294,10 +295,14 @@ body{font-family:"Hiragino Kaku Gothic ProN","Meiryo",sans-serif;background:var(
 
 <!-- Score bar -->
 <div class="score-bar" id="scoreBar">
-  <div class="domain-scores" id="domainScores"></div>
+  <div style="display:flex;flex-direction:column;flex:1;gap:3px">
+    <div class="domain-scores" id="domainScores"></div>
+    <div class="domain-scores" id="v6DomainScores" style="font-size:10px;opacity:.85"></div>
+  </div>
   <div class="total-box">
     <div class="total-num" id="totalScore">—</div>
-    <div class="total-lbl" id="totalLabel">/ 50点</div>
+    <div class="total-lbl" id="totalLabel">/ 100点</div>
+    <div id="v6TotalLabel" style="font-size:9px;color:var(--sub);margin-top:2px">v6:—/60</div>
   </div>
 </div>
 
@@ -482,17 +487,17 @@ const ITEMS=[
 
 // ドメインキー = 脳部位名（ITEMSの r フィールドと一致）
 const DOMAINS={
-  "前頭葉":         {name:"前頭葉",         alloc:10,color:"#5B9BD5",bg:"#DAEEF3"},
-  "小脳":           {name:"小脳",           alloc:10,color:"#70AD47",bg:"#E2EFDA"},
-  "頭頂葉":         {name:"頭頂葉",         alloc:3, color:"#FFC000",bg:"#FFF2CC"},
-  "側頭葉":         {name:"側頭葉",         alloc:3, color:"#ED7D31",bg:"#FCE4D6"},
-  "後頭葉":         {name:"後頭葉",         alloc:4, color:"#7030A0",bg:"#E2D9F3"},
-  "島皮質":         {name:"島皮質",         alloc:2, color:"#CC4444",bg:"#FFE6E6"},
-  "迷走神経":       {name:"迷走神経",       alloc:4, color:"#888888",bg:"#F2F2F2"},
-  "大脳基底核・中脳":{name:"大脳基底核・中脳",alloc:4,color:"#00897B",bg:"#E0F2F1"},
-  "原始反射":       {name:"原始反射",       alloc:10,color:"#AD1457",bg:"#FCE4EC"},
+  "前頭葉":         {name:"前頭葉",         alloc:20,color:"#5B9BD5",bg:"#DAEEF3"},
+  "小脳":           {name:"小脳",           alloc:20,color:"#70AD47",bg:"#E2EFDA"},
+  "頭頂葉":         {name:"頭頂葉",         alloc:6, color:"#FFC000",bg:"#FFF2CC"},
+  "側頭葉":         {name:"側頭葉",         alloc:6, color:"#ED7D31",bg:"#FCE4D6"},
+  "後頭葉":         {name:"後頭葉",         alloc:8, color:"#7030A0",bg:"#E2D9F3"},
+  "島皮質":         {name:"島皮質",         alloc:4, color:"#CC4444",bg:"#FFE6E6"},
+  "迷走神経":       {name:"迷走神経",       alloc:8, color:"#888888",bg:"#F2F2F2"},
+  "大脳基底核・中脳":{name:"大脳基底核・中脳",alloc:8,color:"#00897B",bg:"#E0F2F1"},
+  "原始反射":       {name:"原始反射",       alloc:20,color:"#AD1457",bg:"#FCE4EC"},
 };
-// 合計: 10+10+3+3+4+2+4+4+10 = 50点
+// 合計: 20+20+6+6+8+4+8+8+20 = 100点（NOIC v6 で50→100に2倍化、2026-05-08）
 
 // ══════════════════════════════════════════════════════
 // RESYNC ITEM DATA (20種目: D4原始反射9 + D5バランス3 + D6ビジョン5 + D7呼吸3)
@@ -621,7 +626,7 @@ function getItemsFor(type,ver){
 function getDomainsFor(type){ return type==="resync"?RESYNC_DOMAINS:NOIC_DOMAINS; }
 function curItems(){const g=store.guests[currentGid];return getItemsFor(currentType(),g?g.schemaVer:1);}
 function curDomains(){ return getDomainsFor(currentType()); }
-function curMaxScore(){ return currentType()==="resync"?100:50; }
+function curMaxScore(){ return 100; }  // NOIC v6 で100点満点化（resync同様）
 function typeLabel(type){ return type==="resync"?"resync":"NOIC"; }
 
 // ══════════════════════════════════════════════════════
@@ -664,6 +669,9 @@ async function initFirebaseFromJson(){
         experimentalForceLongPolling: true,
       });
     }catch(e2){ console.warn("firestore.settings", e2); }
+    // オフライン永続化: タブ休止・瞬断・リロードでも未送信の書き込みを失わない
+    try{ await fs.enablePersistence({synchronizeTabs:true}); }
+    catch(e3){ console.warn("firestore.persistence", (e3&&e3.code)||e3); }
     db = fs;
     return true;
   }catch(e){
@@ -693,13 +701,93 @@ function localSaveStore(st){
 }
 
 /* --- Firestore 読み書き --- */
-async function saveGuestToCloud(gid,guest){
+/* クラウド保存失敗の再試行キュー（保存失敗を黙殺せず、必ず後で送る） */
+const _cloudPending=new Set();
+let _retryTimer=null;
+function _noteCloudFail(gid){
+  _cloudPending.add(gid);
+  const b=document.getElementById("saveBadge");
+  if(b)b.textContent="⚠ クラウド保存待ち "+_cloudPending.size+"件（端末には保存済）";
+  if(!_retryTimer)_retryTimer=setTimeout(_flushPending,5000);
+}
+async function _flushPending(){
+  _retryTimer=null;
+  if(!db||!_cloudPending.size)return;
+  for(const gid of[..._cloudPending]){
+    const g=store.guests[gid];
+    if(!g){_cloudPending.delete(gid);continue;}
+    try{
+      await db.collection("guests").doc(gid).set(g,{merge:true});
+      _cloudPending.delete(gid);
+    }catch(e){/* 次回再試行 */}
+  }
+  const b=document.getElementById("saveBadge");
+  if(b){
+    if(_cloudPending.size){
+      b.textContent="⚠ クラウド保存待ち "+_cloudPending.size+"件（端末には保存済）";
+      _retryTimer=setTimeout(_flushPending,15000);
+    }else{
+      const d=new Date();
+      b.textContent="☁ "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")+" 保存";
+    }
+  }
+}
+function _cloudSavedBadge(){
+  if(_cloudPending.size)return;
+  const b=document.getElementById("saveBadge");
+  if(!b)return;
+  const d=new Date();
+  b.textContent="☁ "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")+" 保存";
+}
+/**
+ * 変更のあったゲスト1名だけをクラウドへ保存する。
+ * ドキュメント全体を set() で丸ごと上書きしない（古いタブが他ゲスト・他日付の
+ * 新しいデータを消してしまう事故 = 「シートが消える」の主因を根絶する）。
+ * - changedDate: そのアセスメント日付だけをフィールド単位で差し替え
+ * - removedDates: 日付キーの削除（FieldValue.delete）
+ */
+async function saveGuestToCloud(gid,guest,changedDate,removedDates){
   if(!db) return;
   try{
-    // 削除後に遅延到着した set がドキュメントを復活させない（最後の1人が消えない原因になり得る）
+    // 削除後に遅延到着した書き込みがドキュメントを復活させない
     if(!store.guests[gid]||store.guests[gid]!==guest)return;
-    await db.collection("guests").doc(gid).set(guest);
-  }catch(e){console.warn("cloud save error",e);}
+    const ref=db.collection("guests").doc(gid);
+    const FP=firebase.firestore.FieldPath;
+    const args=[];
+    for(const[k,v]of Object.entries(guest)){
+      if(k==="assessments")continue;
+      args.push(new FP(k),v===undefined?null:v);
+    }
+    if(changedDate&&guest.assessments&&guest.assessments[changedDate]){
+      args.push(new FP("assessments",changedDate),guest.assessments[changedDate]);
+    }
+    for(const d of(removedDates||[])){
+      args.push(new FP("assessments",d),firebase.firestore.FieldValue.delete());
+    }
+    await ref.update(args[0],args[1],...args.slice(2));
+    _cloudSavedBadge();
+  }catch(e){
+    const code=(e&&e.code)?String(e.code):"";
+    if(code==="not-found"){
+      // 新規ゲスト（クラウド未作成）は全体を作成
+      try{
+        if(store.guests[gid]===guest)await db.collection("guests").doc(gid).set(guest);
+        _cloudSavedBadge();
+        return;
+      }catch(e2){e=e2;}
+    }
+    console.warn("cloud save error",e);
+    _noteCloudFail(gid);
+  }
+}
+/** merge:true の安全な全体保存（インポート・復元・再試行用。何も削除しない） */
+async function saveGuestMergeToCloud(gid,guest){
+  if(!db)return;
+  try{
+    if(!store.guests[gid]||store.guests[gid]!==guest)return;
+    await db.collection("guests").doc(gid).set(guest,{merge:true});
+    _cloudSavedBadge();
+  }catch(e){console.warn("cloud merge error",e);_noteCloudFail(gid);}
 }
 async function deleteGuestFromCloud(gid){
   if(!db) return true;
@@ -717,15 +805,28 @@ async function saveTrashToCloud(trash){
   catch(e){console.warn("cloud trash error",e);}
 }
 async function loadFromCloud(){
-  if(!db) return{guests:{},trash:[],settings:{}};
-  const[gSnap,tSnap]=await Promise.all([
+  if(!db) return{guests:{},trash:[],settings:{},deleted:{}};
+  const[gSnap,tSnap,dSnap]=await Promise.all([
     db.collection("guests").get(),
-    db.collection("config").doc("trash").get()
+    db.collection("config").doc("trash").get(),
+    db.collection("config").doc("deleted").get()
   ]);
   const guests={};
   gSnap.forEach(d=>{guests[d.id]=d.data();});
   const trash=tSnap.exists?(tSnap.data().items||[]):[];
-  return{guests,trash,settings:{}};
+  const deleted=dSnap.exists?(dSnap.data()||{}):{};
+  return{guests,trash,settings:{},deleted};
+}
+/** 削除済みゲストの墓標（古い端末からの復活アップロードを防ぐ） */
+async function markGuestDeleted(gid){
+  if(!db)return;
+  try{await db.collection("config").doc("deleted").set({[gid]:nowIso()},{merge:true});}
+  catch(e){console.warn("deleted mark error",e);}
+}
+async function unmarkGuestDeleted(gid){
+  if(!db)return;
+  try{await db.collection("config").doc("deleted").set({[gid]:firebase.firestore.FieldValue.delete()},{merge:true});}
+  catch(e){console.warn("deleted unmark error",e);}
 }
 /** 一時的な unavailable / デッドラインはリトライ（Safari・回線の瞬断対策） */
 async function loadFromCloudWithRetry(max=4){
@@ -762,7 +863,14 @@ function mergeGuestFromRemote(docId,incoming,prev){
   const raw=incoming&&typeof incoming==="object"?incoming:{};
   const p=prev&&typeof prev==="object"?prev:{};
   const out={...p,...raw,id:docId};
-  out.assessments={...(p.assessments||{}),...(raw.assessments||{})};
+  // 日付ごとに savedAt の新しい方を採用（古いクラウドdocが手元の最新入力を潰さない）
+  out.assessments={...(p.assessments||{})};
+  for(const[dt,ra]of Object.entries(raw.assessments||{})){
+    const pa=out.assessments[dt];
+    if(!pa||String((ra&&ra.savedAt)||"")>=String((pa&&pa.savedAt)||"")){
+      out.assessments[dt]=ra;
+    }
+  }
   const nm=String(out.name??"").trim();
   if(!nm){
     const pm=String(p.name??"").trim();
@@ -825,31 +933,41 @@ function startRealtimeSync(){
   );
 }
 
-/* --- 統合 saveStore（ローカル + クラウド） --- */
-function saveStore(st){
+/* --- 統合 saveStore（ローカル + クラウド） ---
+ * 旧実装は「毎回・全ゲストを set() で丸ごと上書き」しており、
+ * 古いタブからの1タップで全52名分のデータが巻き戻る事故と、
+ * 書き込み量の爆発（無料枠超過→保存失敗→データ消失）を起こしていた。
+ * 新実装は opts で指定された変更分だけをクラウドへ送る。
+ * opts なし = ローカル保存のみ（settings 等クラウド不要の変更）。
+ */
+function saveStore(st,opts){
   localSaveStore(st);
-  // 各ゲストをクラウドへ
-  for(const[gid,guest]of Object.entries(st.guests||{})){
-    saveGuestToCloud(gid,guest);
+  if(!opts)return;
+  if(opts.trash)saveTrashToCloud(st.trash||[]);
+  const gids=opts.gids||(opts.gid?[opts.gid]:[]);
+  for(const gid of gids){
+    const g=st.guests[gid];
+    if(!g)continue;
+    saveGuestToCloud(gid,g,opts.date,opts.removedDates);
   }
-  // ゴミ箱をクラウドへ
-  saveTrashToCloud(st.trash||[]);
 }
 // データマイグレーション: mx変更後に片側score:0を正しいscore:1へ自動修正
+// （クラウドへの反映は initApp のクラウド同期後に _migrateChangedGids 分だけ行う）
+const _migrateChangedGids=new Set();
 function migrateStore(st){
   // mx:1→2 に変更した5項目（片側"右"or"左" → score:0 だったものを score:1 へ）
   const fixItems=["グーチョキパー","クイックタップ","パタパタ","バイバイ","指鼻テスト"];
   const sideVals=new Set(["右","左"]);
   let changed=false;
-  for(const g of Object.values(st.guests||{})){
+  for(const[gid,g]of Object.entries(st.guests||{})){
     for(const a of Object.values(g.assessments||{})){
       for(const name of fixItems){
         const sv=a.items?.[name];
-        if(sv&&sideVals.has(sv.result)&&sv.score===0){sv.score=1;changed=true;}
+        if(sv&&sideVals.has(sv.result)&&sv.score===0){sv.score=1;changed=true;_migrateChangedGids.add(gid);}
       }
     }
   }
-  if(changed)saveStore(st);
+  if(changed)localSaveStore(st);
   return st;
 }
 // cloud版: 起動時は空で初期化し、initApp()でlocalStorage/Firestoreから上書き
@@ -868,6 +986,7 @@ function esc(s){return(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace
 let currentGid=null;
 let radarChart=null;
 let guestFilter="all";
+const _dateByGid={}; // ゲストごとの表示中測定日（他ゲストへの日付引き継ぎ事故を防ぐ）
 let newGuestType="noic";
 
 function setFilter(f,btn){
@@ -929,7 +1048,7 @@ function renderGuestList(){
     const g=store.guests[id];
     const gt=g.type||"noic";
     const sc=getLatestScore(g);
-    const maxPt=gt==="resync"?100:50;
+    const maxPt=100;  // NOIC v6 で100点満点化
     const initial=(g.name||"?").replace(/\s/g,"")[0]||"?";
     const dateCount=Object.keys(g.assessments||{}).length;
     const metaParts=[g.age,g.gender,gt==="noic"?g.status:g.purpose].filter(Boolean);
@@ -1011,7 +1130,7 @@ function saveEditGuest(){
     g.purpose=document.getElementById("editPurpose").value.trim();
   }
   g.updatedAt=nowIso();
-  saveStore(store);
+  saveStore(store,{gid:editTargetId});
   closeModal("modalEditGuest");
   showToast("✓ "+name+" の情報を更新しました");
   // アセスメントページが表示中なら情報バーを更新
@@ -1038,7 +1157,7 @@ function createGuest(){
     base.purpose=document.getElementById("newPurpose").value.trim();
   }
   store.guests[id]=base;
-  saveStore(store);
+  saveStore(store,{gid:id});
   closeModal("modalNewGuest");
   showToast("✓ "+name+" を登録しました");
   selectGuest(id);
@@ -1069,23 +1188,65 @@ function renderAssessment(){
   const metaArr=gt==="noic"?[g.age,g.gender,g.diagnosis]:[g.age,g.gender,g.purpose];
   document.getElementById("assessMeta").textContent=metaArr.filter(Boolean).join(" | ")||"—";
 
-  // Date
+  // Date（ゲストごとに独立して管理する。
+  // 旧実装は「一度設定した日付を全ゲストで使い回す」ため、直前に見ていた別ゲストの
+  // 過去測定日で新しいゲストのシートが保存され、「入力が消えた」ように見える事故が頻発した）
   const today=new Date().toISOString().split("T")[0];
   const dateInput=document.getElementById("assessDate");
   const dates=Object.keys(g.assessments||{}).sort().reverse();
-  if(!dateInput.value)dateInput.value=dates[0]||today;
+  dateInput.value=_dateByGid[currentGid]||dates[0]||today;
+  _dateByGid[currentGid]=dateInput.value;
 
   buildItems(g,dateInput.value);
-  dateInput.onchange=()=>buildItems(g,dateInput.value);
+  dateInput.onchange=()=>{_dateByGid[currentGid]=dateInput.value;buildItems(g,dateInput.value);updateProgress();updateScoreBar();};
   updateProgress();
   updateScoreBar();
 }
 
+/** 書き込み用: シートを作成して返す（入力時のみ呼ぶ） */
 function getAssessment(g,date){
   if(!g.assessments)g.assessments={};
   if(!g.assessments[date])g.assessments[date]={date,items:{},memos:{},savedAt:nowIso(),totalScore:null};
   if(!g.assessments[date].memos)g.assessments[date].memos={};
   return g.assessments[date];
+}
+/** 読み取り用: シートを作らずに参照する（表示だけで空シートが量産され、
+ * 「最新日付＝空」が本物のデータを隠す事故を防ぐ） */
+function peekAssessment(g,date){
+  const a=(g.assessments||{})[date];
+  if(!a)return{date,items:{},memos:{}};
+  if(!a.memos)a.memos={};
+  return a;
+}
+/** 完全に空のシートか（項目ゼロ・有効メモゼロ） */
+function isEmptyAssessment(a){
+  if(!a)return true;
+  if(Object.keys(a.items||{}).length)return false;
+  for(const v of Object.values(a.memos||{})){
+    if(String(v||"").trim())return false;
+  }
+  return true;
+}
+/** 表示中シートの測定日を変更する（誤った日付で保存されたシートの救済用） */
+function changeAssessDate(){
+  const g=store.guests[currentGid];
+  if(!g){showToast("ゲストを選択してください");return}
+  const oldDate=document.getElementById("assessDate").value;
+  const a=(g.assessments||{})[oldDate];
+  if(!a||isEmptyAssessment(a)){showToast("移動する入力データがありません");return}
+  const nd=prompt("このシートの測定日を変更します（YYYY-MM-DD）",oldDate);
+  if(!nd||nd===oldDate)return;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(nd)){showToast("⚠ 日付は YYYY-MM-DD 形式で入力してください");return}
+  const existing=g.assessments[nd];
+  if(existing&&!isEmptyAssessment(existing)){showToast("⚠ "+nd+" には別の入力データがあります。先にご確認ください");return}
+  delete g.assessments[oldDate];
+  a.date=nd;a.savedAt=nowIso();
+  g.assessments[nd]=a;
+  g.updatedAt=nowIso();
+  _dateByGid[currentGid]=nd;
+  saveStore(store,{gid:currentGid,date:nd,removedDates:[oldDate]});
+  renderAssessment();
+  showToast("📅 "+oldDate+" → "+nd+" に変更しました");
 }
 
 function buildItems(g,date){
@@ -1094,7 +1255,7 @@ function buildItems(g,date){
   const openRegions=new Set();
   container.querySelectorAll(".card-body.open[data-region]").forEach(b=>openRegions.add(b.dataset.region));
   container.innerHTML="";
-  const assessment=getAssessment(g,date);
+  const assessment=peekAssessment(g,date); // 表示だけでは空シートを作らない
   let currentRegion="";
   const _items=curItems();
 
@@ -1223,7 +1384,7 @@ function pickOpt(el){
   a.savedAt=nowIso();
   g.updatedAt=nowIso();
   calcScores(a);
-  saveStore(store);
+  saveStore(store,{gid:currentGid,date});
   updateProgress();
   updateScoreBar();
   updateRegionCount(item.r);
@@ -1277,7 +1438,7 @@ function pickSteppedExtra(el){
   sv.extras=extras;
   a.items[item.n]=sv;
   a.savedAt=nowIso();g.updatedAt=nowIso();
-  saveStore(store);
+  saveStore(store,{gid:currentGid,date});
 }
 function saveStepped(idx,item,dirLabel,dirScore,degLabel,degScore){
   const score=degScore!==null?degScore:dirScore;
@@ -1291,7 +1452,7 @@ function saveStepped(idx,item,dirLabel,dirScore,degLabel,degScore){
   const existing=a.items[item.n]||{};
   a.items[item.n]={result,direction:dirLabel,degree:degLabel||"",extras:existing.extras||[],score};
   a.savedAt=nowIso();g.updatedAt=nowIso();
-  calcScores(a);saveStore(store);
+  calcScores(a);saveStore(store,{gid:currentGid,date});
   updateProgress();updateScoreBar();updateRegionCount(item.r);
 }
 
@@ -1350,12 +1511,15 @@ function pickMulti(el){
   a.savedAt=nowIso();
   g.updatedAt=nowIso();
   calcScores(a);
-  saveStore(store);
+  saveStore(store,{gid:currentGid,date});
   updateProgress();
   updateScoreBar();
   updateRegionCount(item.r);
 }
 
+// メモは1文字ごとに oninput で呼ばれるため、クラウド送信のみ0.8秒デバウンス
+// （ローカル保存は即時。旧実装はキー入力ごとに全ゲスト分を書き込み、無料枠を浪費していた）
+let _memoTimer=null,_memoKey=null;
 function saveMemo(el){
   const idx=parseInt(el.dataset.idx);
   const item=curItems()[idx];
@@ -1363,8 +1527,13 @@ function saveMemo(el){
   const date=document.getElementById("assessDate").value;
   const a=getAssessment(g,date);
   a.memos[item.n]=el.value;
+  a.savedAt=nowIso();
   g.updatedAt=nowIso();
-  saveStore(store);
+  localSaveStore(store);
+  const gid=currentGid,key=gid+"|"+date;
+  if(_memoTimer&&_memoKey===key)clearTimeout(_memoTimer);
+  _memoKey=key;
+  _memoTimer=setTimeout(()=>{_memoTimer=null;saveStore(store,{gid,date});},800);
 }
 
 function calcScores(a,_items,_domains){
@@ -1392,7 +1561,7 @@ function calcScores(a,_items,_domains){
 function updateProgress(){
   const g=store.guests[currentGid];if(!g)return;
   const date=document.getElementById("assessDate").value;
-  const a=getAssessment(g,date);
+  const a=peekAssessment(g,date);
   const total=curItems().length;
   const n=Object.keys(a.items).length;
   const pct=total>0?Math.round(n/total*100):0;
@@ -1403,7 +1572,7 @@ function updateProgress(){
 function updateRegionCount(region){
   const g=store.guests[currentGid];if(!g)return;
   const date=document.getElementById("assessDate").value;
-  const a=getAssessment(g,date);
+  const a=peekAssessment(g,date);
   const rItems=curItems().filter(i=>i.r===region);
   const filled=rItems.filter(i=>a.items[i.n]?.result!==undefined).length;
   const el=document.getElementById("rcnt-"+region);
@@ -1413,7 +1582,7 @@ function updateRegionCount(region){
 function updateScoreBar(){
   const g=store.guests[currentGid];if(!g)return;
   const date=document.getElementById("assessDate").value;
-  const a=getAssessment(g,date);
+  const a=peekAssessment(g,date);
   const domains=curDomains();
   calcScores(a);
   document.getElementById("domainScores").innerHTML=
@@ -1424,6 +1593,41 @@ function updateScoreBar(){
   document.getElementById("totalScore").textContent=a.totalScore!=null?a.totalScore:"—";
   document.getElementById("totalLabel").textContent="/ "+curMaxScore()+"点";
   document.getElementById("scoreBar").classList.add("active");
+
+  // ── NOIC v6 D4-D10 配点表示（脳スコア用・60点満点） ──
+  const gt=g.type||"noic";
+  const v6El=document.getElementById("v6DomainScores");
+  const v6TotalEl=document.getElementById("v6TotalLabel");
+  if(gt==="noic"&&v6El){
+    const V6_AREA_TO_DOMAIN={
+      "前頭葉":"D4","小脳":"D5","後頭葉":"D6","頭頂葉":"D7","側頭葉":"D7",
+      "島皮質":"D8","迷走神経":"D8","大脳基底核・中脳":"D9","原始反射":"D10"
+    };
+    const V6_WEIGHTS={D4:11,D5:13,D6:7,D7:6,D8:6,D9:5,D10:12};
+    const V6_LABELS={D4:"前頭",D5:"小脳",D6:"視覚",D7:"感統",D8:"自律",D9:"基底",D10:"反射"};
+    const V6_COLORS={D4:"#5B9BD5",D5:"#70AD47",D6:"#7030A0",D7:"#FFC000",D8:"#888888",D9:"#00897B",D10:"#AD1457"};
+    const v6Raw={D4:0,D5:0,D6:0,D7:0,D8:0,D9:0,D10:0};
+    const v6Max={D4:0,D5:0,D6:0,D7:0,D8:0,D9:0,D10:0};
+    for(const[dk]of Object.entries(domains)){
+      const v6d=V6_AREA_TO_DOMAIN[dk];
+      if(!v6d)continue;
+      const s=a.scores?.[dk]||{raw:0,max:0};
+      v6Raw[v6d]+=s.raw;
+      v6Max[v6d]+=s.max;
+    }
+    let v6Total=0;
+    const pills=["D4","D5","D6","D7","D8","D9","D10"].map(v6d=>{
+      const raw=v6Raw[v6d],max=v6Max[v6d],w=V6_WEIGHTS[v6d];
+      const pt=max>0?(raw/max*w):0;
+      v6Total+=pt;
+      return`<div class="domain-pill" style="border-left:3px solid ${V6_COLORS[v6d]};font-size:10px;padding:2px 6px"><span style="font-size:8px;color:#888">v6</span> ${v6d}${V6_LABELS[v6d]} <strong>${pt.toFixed(1)}</strong>/${w}</div>`;
+    });
+    v6El.innerHTML=pills.join("");
+    if(v6TotalEl)v6TotalEl.textContent=`v6: ${v6Total.toFixed(1)}/60`;
+  } else if(v6El){
+    v6El.innerHTML="";
+    if(v6TotalEl)v6TotalEl.textContent="";
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -1561,7 +1765,8 @@ async function confirmDelete(){
       renderGuestList();
       return;
     }
-    saveStore(store);
+    markGuestDeleted(gid); // 古い端末からの復活アップロードを防ぐ墓標
+    saveStore(store,{trash:true});
     closeModal("modalDelete");
     currentGid=null;
     document.getElementById("assessGuestInfo").style.display="none";
@@ -1574,8 +1779,9 @@ async function confirmDelete(){
 function renderTrash(){
   const el=document.getElementById("trashList");
   const cutoff=new Date(Date.now()-30*864e5).toISOString();
+  const beforeLen=store.trash.length;
   store.trash=store.trash.filter(g=>g.deletedAt>cutoff);
-  saveStore(store);
+  if(store.trash.length!==beforeLen)saveStore(store,{trash:true});
   if(!store.trash.length){
     el.innerHTML='<p style="font-size:12px;color:var(--sub)">ゴミ箱は空です。</p>';return;
   }
@@ -1591,7 +1797,8 @@ function restoreGuest(idx){
   delete g.deletedAt;
   store.guests[g.id]=g;
   store.trash.splice(idx,1);
-  saveStore(store);renderTrash();
+  unmarkGuestDeleted(g.id);
+  saveStore(store,{gid:g.id,trash:true});renderTrash();
   showToast("✓ "+g.name+" を復元しました");
 }
 
@@ -1627,7 +1834,7 @@ function exportCurrentExcel(){
   }
   sumRows.push(["測定日",date,"出力日",new Date().toLocaleDateString("ja-JP")]);
   sumRows.push([]);
-  const domainRange=gt==="resync"?"D4-D7":"D4-D8";
+  const domainRange=gt==="resync"?"D4-D7":"D4-D10";  // NOIC v6 で D4-D10 化
   sumRows.push(["■ 脳アセスメントスコア（"+domainRange+"）"]);
   sumRows.push(["ドメイン","素点","満点","配点(pt)","獲得点","達成率"]);
   for(const[dk,dv]of Object.entries(domains)){
@@ -1715,16 +1922,19 @@ function importJSON(event){
       const data=JSON.parse(e.target.result);
       if(!data.guests){showToast("⚠ 無効なバックアップファイル");return}
       let imported=0;
+      const touched=[];
       for(const[id,g]of Object.entries(data.guests)){
-        if(!store.guests[id]){store.guests[id]=g;imported++}
+        if(!store.guests[id]){store.guests[id]=g;imported++;touched.push(id)}
         else{
           for(const[date,a]of Object.entries(g.assessments||{})){
             if(!store.guests[id].assessments[date])store.guests[id].assessments[date]=a;
           }
-          imported++;
+          imported++;touched.push(id);
         }
       }
-      saveStore(store);renderGuestList();
+      localSaveStore(store);
+      for(const id of touched)saveGuestMergeToCloud(id,store.guests[id]);
+      renderGuestList();
       showToast("✓ "+imported+"件を復元しました");
     }catch(err){showToast("⚠ 読み込みエラー")}
   };
@@ -1744,7 +1954,7 @@ function generateMarkdown(g,a){
   const gt=g.type||"noic";
   const items=getItemsFor(gt,g.schemaVer);
   const domains=getDomainsFor(gt);
-  const maxScore=gt==="resync"?100:50;
+  const maxScore=100;  // NOIC v6 で100点満点化
   const brandLabel=typeLabel(gt);
   calcScores(a,items,domains);
   const L=[];
@@ -1779,6 +1989,44 @@ function generateMarkdown(g,a){
     L.push(`| ${dk} | ${s.points} | ${dv.alloc} | ${s.raw} | ${s.max} | ${pct}% |`);
   }
   L.push("");
+
+  // ── NOIC v6 D4-D10 配点（脳スコア用・60点満点） ──
+  if(gt==="noic"){
+    const V6_AREA_TO_DOMAIN={
+      "前頭葉":"D4","小脳":"D5","後頭葉":"D6","頭頂葉":"D7","側頭葉":"D7",
+      "島皮質":"D8","迷走神経":"D8","大脳基底核・中脳":"D9","原始反射":"D10"
+    };
+    const V6_WEIGHTS={D4:11,D5:13,D6:7,D7:6,D8:6,D9:5,D10:12};
+    const V6_LABELS={
+      D4:"前頭葉・実行機能",D5:"小脳・前庭",D6:"ビジョン・眼位",
+      D7:"感覚統合（頭頂+側頭）",D8:"自律神経末梢（島皮質+迷走神経）",
+      D9:"大脳基底核・中脳",D10:"原始反射"
+    };
+    // 領域別素点をD4-D10に集約
+    const v6Raw={D4:0,D5:0,D6:0,D7:0,D8:0,D9:0,D10:0};
+    const v6Max={D4:0,D5:0,D6:0,D7:0,D8:0,D9:0,D10:0};
+    for(const[dk]of Object.entries(domains)){
+      const v6d=V6_AREA_TO_DOMAIN[dk];
+      if(!v6d)continue;
+      const s=a.scores?.[dk]||{raw:0,max:0};
+      v6Raw[v6d]+=s.raw;
+      v6Max[v6d]+=s.max;
+    }
+    L.push("## NOIC v6 D4-D10 配点（脳スコア用・60点満点）\n");
+    L.push("| ドメイン | 名称 | 素点 | 満点 | 達成率 | 配点 | 換算点 |");
+    L.push("|---|---|---|---|---|---|---|");
+    let v6Total=0;
+    for(const v6d of["D4","D5","D6","D7","D8","D9","D10"]){
+      const raw=v6Raw[v6d],max=v6Max[v6d],w=V6_WEIGHTS[v6d];
+      const pct=max>0?(raw/max*100):0;
+      const pt=max>0?(raw/max*w):0;
+      v6Total+=pt;
+      L.push(`| ${v6d} | ${V6_LABELS[v6d]} | ${raw} | ${max} | ${pct.toFixed(1)}% | ${w} | ${pt.toFixed(2)} |`);
+    }
+    L.push(`| **合計** | **脳アセス由来** | | | | **60** | **${v6Total.toFixed(2)}** |`);
+    L.push("");
+    L.push("※ Python `noic_brain_score_v6.py` で D1-D3（脳波由来 40点）と合算し、整合性ボーナス・シグモイド変換・切り捨てを適用して総合スコアを算出。\n");
+  }
 
   let curRegion="";
   for(const item of items){
@@ -1881,7 +2129,7 @@ async function initApp(){
 
   await initFirebaseFromJson();
 
-  // 2. Firestoreから読み込んでマージ（クラウドデータ優先）
+  // 2. Firestoreから読み込んでマージ（日付ごとに savedAt の新しい方を採用）
   try{
     const cloud=await loadFromCloudWithRetry();
     // IDベースでマージ（部分docで name が消える事故を防ぐため1件ずつ merge）
@@ -1889,14 +2137,52 @@ async function initApp(){
     for(const[id,data]of Object.entries(cloud.guests||{})){
       next[id]=mergeGuestFromRemote(id,data,next[id]);
     }
+    // クラウドで削除済み（墓標あり）のゲストはローカルからも外す
+    for(const id of Object.keys(next)){
+      if(!cloud.guests[id]&&cloud.deleted&&cloud.deleted[id])delete next[id];
+    }
     store.guests=next;
     if(cloud.trash.length>0)store.trash=cloud.trash;
+
+    // 2a. 空シート掃除: 項目もメモも無いシートが「最新日付」を占有して
+    //     本物の入力データを隠す事故を解消（作成から48時間過ぎた空シートのみ削除）
+    const emptyCutoff=new Date(Date.now()-48*3600e3).toISOString();
+    for(const[gid,g]of Object.entries(store.guests)){
+      const removed=[];
+      for(const[dt,a]of Object.entries(g.assessments||{})){
+        if(isEmptyAssessment(a)&&String((a&&a.savedAt)||"")<emptyCutoff)removed.push(dt);
+      }
+      if(removed.length){
+        removed.forEach(dt=>delete g.assessments[dt]);
+        if(cloud.guests[gid])saveGuestToCloud(gid,g,null,removed);
+      }
+    }
     localSaveStore(store);
     renderGuestList();
 
-    // ローカルにあってクラウドにないゲストを初回アップロード
+    // 2b. データ復元: この端末にしかない（またはこの端末の方が新しい）シートを
+    //     クラウドへ再アップロード（過去に消えたデータの自動回復）
+    const trashIds=new Set((store.trash||[]).map(t=>t&&t.id));
     for(const[gid,guest]of Object.entries(store.guests)){
-      if(!cloud.guests[gid])saveGuestToCloud(gid,guest);
+      const cg=cloud.guests[gid];
+      if(!cg){
+        // クラウドに存在しないゲスト: 削除墓標・ゴミ箱に無ければ復元
+        if(!trashIds.has(gid)&&!(cloud.deleted&&cloud.deleted[gid]))saveGuestMergeToCloud(gid,guest);
+        continue;
+      }
+      const recoverDates=Object.keys(guest.assessments||{}).filter(dt=>{
+        const la=guest.assessments[dt];
+        if(isEmptyAssessment(la))return false;
+        const ca=(cg.assessments||{})[dt];
+        return !ca||String((la&&la.savedAt)||"")>String((ca&&ca.savedAt)||"");
+      });
+      for(const dt of recoverDates)saveGuestToCloud(gid,guest,dt);
+      if(recoverDates.length)console.info("復元アップロード:",guest.name,recoverDates.join(","));
+    }
+
+    // 2c. マイグレーション修正分をクラウドへ
+    for(const gid of _migrateChangedGids){
+      if(store.guests[gid])saveGuestMergeToCloud(gid,store.guests[gid]);
     }
 
     // 3. リアルタイム同期スタート
@@ -1926,6 +2212,35 @@ async function initApp(){
     }
   }
 }
+
+// ══════════════════════════════════════════════════════
+// 復帰時の再同期（iPadでタブが長時間休止 → 古い状態のまま操作する事故を防ぐ）
+// ══════════════════════════════════════════════════════
+let _lastResync=0;
+async function _resyncFromCloud(){
+  if(!db)return;
+  const now=Date.now();
+  if(now-_lastResync<60e3)return; // 1分以内の連続再同期はスキップ
+  _lastResync=now;
+  try{
+    const cloud=await loadFromCloud();
+    const next={...store.guests};
+    for(const[id,data]of Object.entries(cloud.guests||{})){
+      next[id]=mergeGuestFromRemote(id,data,next[id]);
+    }
+    for(const id of Object.keys(next)){
+      if(!cloud.guests[id]&&cloud.deleted&&cloud.deleted[id])delete next[id];
+    }
+    store.guests=next;
+    if(cloud.trash.length>0)store.trash=cloud.trash;
+    localSaveStore(store);
+    renderGuestList();
+  }catch(e){/* オフライン時は次の復帰で再試行 */}
+}
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="visible"){_resyncFromCloud();_flushPending();}
+});
+window.addEventListener("online",()=>{_resyncFromCloud();_flushPending();});
 
 initApp();
 </script>
