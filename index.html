@@ -353,8 +353,8 @@ body{font-family:"Hiragino Kaku Gothic ProN","Meiryo",sans-serif;background:var(
     <div id="newFieldsNoic">
       <div class="form-group"><label>ステータス（園・学校など）</label><input id="newStatus" placeholder="例: 小学2年生（公立）"></div>
       <div class="form-group"><label>診断名</label><input id="newDiag" placeholder="例: 特になし / ADHD など"></div>
-      <div class="form-group"><label>脳バランス</label>
-        <select id="newBalance"><option value="">—</option><option>左ヘミー原始反射</option><option>右ヘミー原始反射</option><option>混合</option><option>未評価</option></select></div>
+      <!-- 脳バランスの入力欄は 2026-08-20 に廃止。測定前に推測で入れるものではなく、
+           脳波（左右脳バランス）＋脳アセスの結果から分析してレポート側で推定する。 -->
     </div>
     <div id="newFieldsResync" style="display:none">
       <div class="form-group"><label>主訴・目的</label><input id="newPurpose" placeholder="例: 肩こり改善 / パフォーマンス向上"></div>
@@ -380,8 +380,7 @@ body{font-family:"Hiragino Kaku Gothic ProN","Meiryo",sans-serif;background:var(
     <div id="editFieldsNoic">
       <div class="form-group"><label>ステータス（園・学校など）</label><input id="editStatus" placeholder="例: 小学2年生（公立）"></div>
       <div class="form-group"><label>診断名</label><input id="editDiag" placeholder="例: 特になし / ADHD など"></div>
-      <div class="form-group"><label>脳バランス</label>
-        <select id="editBalance"><option value="">—</option><option>左ヘミー原始反射</option><option>右ヘミー原始反射</option><option>混合</option><option>未評価</option></select></div>
+      <!-- 脳バランスの入力欄は 2026-08-20 に廃止（レポート側で推定する） -->
     </div>
     <div id="editFieldsResync" style="display:none">
       <div class="form-group"><label>主訴・目的</label><input id="editPurpose" placeholder="例: 肩こり改善 / パフォーマンス向上"></div>
@@ -1215,7 +1214,6 @@ function getLatestScore(g){
 function openNewGuestModal(){
   ["newName","newAge","newStatus","newDiag","newPurpose"].forEach(id=>{const e=document.getElementById(id);if(e)e.value="";});
   document.getElementById("newGender").value="";
-  document.getElementById("newBalance").value="";
   pickNewType("noic");
   document.getElementById("modalNewGuest").classList.add("active");
   setTimeout(()=>document.getElementById("newName").focus(),100);
@@ -1241,7 +1239,6 @@ function openEditGuestModalById(id){
   document.getElementById("editAge").value=g.age||"";
   document.getElementById("editStatus").value=g.status||"";
   document.getElementById("editDiag").value=g.diagnosis||"";
-  document.getElementById("editBalance").value=g.brainBalance||"";
   document.getElementById("editPurpose").value=g.purpose||"";
   document.getElementById("modalEditGuest").classList.add("active");
   setTimeout(()=>document.getElementById("editName").focus(),100);
@@ -1257,7 +1254,6 @@ function saveEditGuest(){
   if(gt==="noic"){
     g.status=document.getElementById("editStatus").value.trim();
     g.diagnosis=document.getElementById("editDiag").value.trim();
-    g.brainBalance=document.getElementById("editBalance").value;
   }else{
     g.purpose=document.getElementById("editPurpose").value.trim();
   }
@@ -1284,7 +1280,6 @@ function createGuest(){
   if(gt==="noic"){
     base.status=document.getElementById("newStatus").value.trim();
     base.diagnosis=document.getElementById("newDiag").value.trim();
-    base.brainBalance=document.getElementById("newBalance").value;
   }else{
     base.purpose=document.getElementById("newPurpose").value.trim();
   }
@@ -1959,7 +1954,7 @@ function exportCurrentExcel(){
     ["名前",g.name,"性別",g.gender,"年齢",g.age],
   ];
   if(gt==="noic"){
-    sumRows.push(["ステータス",g.status,"診断名",g.diagnosis,"脳バランス",g.brainBalance]);
+    sumRows.push(["ステータス",g.status,"診断名",g.diagnosis,"脳バランス",g.brainBalance||""]);
   }else{
     sumRows.push(["主訴・目的",g.purpose||"—"]);
   }
@@ -2100,7 +2095,7 @@ function generateMarkdown(g,a){
   if(gt==="noic"){
     L.push(`| ステータス | ${g.status||"—"} |`);
     L.push(`| 診断名 | ${g.diagnosis||"—"} |`);
-    L.push(`| 脳バランス | ${g.brainBalance||"—"} |`);
+    L.push(`| 脳バランス | ${g.brainBalance||"（レポートで推定）"} |`);
   }else{
     L.push(`| 主訴・目的 | ${g.purpose||"—"} |`);
   }
@@ -2214,7 +2209,7 @@ function generateMarkdown(g,a){
     L.push(`- 右側エラー含む項目: ${rightCount}個`);
     L.push(`- 左側エラー含む項目: ${leftCount}個`);
     L.push(`- 両方エラー: ${bothCount}個`);
-    L.push(`- 脳バランス判定: ${g.brainBalance||"未設定"}`);
+    L.push(`- 脳バランス判定: ${g.brainBalance||"（レポートで推定）"}`);
     L.push("");
   }
 
