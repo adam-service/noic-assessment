@@ -106,6 +106,10 @@ body{font-family:"Hiragino Kaku Gothic ProN","Meiryo",sans-serif;background:var(
 .region-迷走神経{border-left:4px solid #888}.region-迷走神経 .card-header{background:var(--gray-l)}
 .region-大脳基底核・中脳{border-left:4px solid #00897B}.region-大脳基底核・中脳 .card-header{background:var(--teal-l)}
 .region-原始反射{border-left:4px solid #AD1457}.region-原始反射 .card-header{background:var(--deepred-l)}
+/* v8（33種目）で追加された領域名。色は メソプレ p8 のバー色に合わせる */
+.region-小脳・前庭{border-left:4px solid #02ADB4}.region-小脳・前庭 .card-header{background:#DFF4F5}
+.region-大脳基底核{border-left:4px solid #FC8A2B}.region-大脳基底核 .card-header{background:#FEEBD9}
+.region-中脳{border-left:4px solid #57B5D7}.region-中脳 .card-header{background:#E2F2F9}
 /* resync regions */
 .region-バランス{border-left:4px solid #2E7D32}.region-バランス .card-header{background:#E8F5E9}
 .region-ビジョン{border-left:4px solid #7030A0}.region-ビジョン .card-header{background:#E2D9F3}
@@ -610,12 +614,136 @@ const RESYNC_DOMAINS={
 const NOIC_ITEMS=ITEMS;
 const NOIC_DOMAINS=DOMAINS;
 
-const CURRENT_SCHEMA=3;
+// ══════════════════════════════════════════════════════
+// NOIC v8 ITEM DATA（33種目・9領域／2026-08-20）
+//   schemaVer >= 4 のゲストに適用。既存ゲスト（schemaVer 1〜3）は上の62種目のまま。
+//   正本: NOIC/脳アセスメントシート/NOIC脳アセスメント_v8_33種目_定義表_.md
+//   全種目 mx=2 に統一（v6 は mx=1 が混在し領域内の重みが不揃いだった）
+// ══════════════════════════════════════════════════════
+const NOIC_ITEMS_V8=[
+  // ⚠️ v8 では「評価不可」に score:-1 を割り当てる。calcScores は score<0 を分母から除外するため、
+  //    実施できなかった種目が達成率を押し下げなくなる（脳スコア側の C1 修正と挙動を揃えた）。
+  //    v6/v7 の62種目は score:0 のまま＝過去ゲストの表示スコアは一切変わらない。
+  // ── 01 原始反射（7）── 左右・上下は統合し、強く残る側で採点。左右差はメモに記録
+  {r:"原始反射",s:"幹系",   n:"モロー反射",             d:"D10",mx:2,opts:[["ない",2],["あまりない",1],["少しある",1],["ある",0],["かなりある",0],["評価不可",-1]]},
+  {r:"原始反射",s:"ガラント",n:"脊椎ガラント反射",       d:"D10",mx:2,opts:[["ない",2],["あまりない",1],["少しある",1],["ある",0],["かなりある",0],["評価不可",-1]]},
+  {r:"原始反射",s:"TLR",    n:"緊張性迷路反射",         d:"D10",mx:2,opts:[["ない",2],["あまりない",1],["少しある",1],["ある",0],["かなりある",0],["評価不可",-1]]},
+  {r:"原始反射",s:"下肢",   n:"バビンスキー反射",       d:"D10",mx:2,opts:[["ない",2],["あまりない",1],["少しある",1],["ある",0],["かなりある",0],["評価不可",-1]]},
+  {r:"原始反射",s:"ATNR",   n:"非対称性緊張性頸反射",   d:"D10",mx:2,opts:[["ない",2],["あまりない",1],["少しある",1],["ある",0],["かなりある",0],["評価不可",-1]]},
+  {r:"原始反射",s:"上肢",   n:"パーマー反射",           d:"D10",mx:2,opts:[["ない",2],["あまりない",1],["少しある",1],["ある",0],["かなりある",0],["評価不可",-1]]},
+  {r:"原始反射",s:"STNR",   n:"対称性緊張性頸反射",     d:"D10",mx:2,opts:[["ない",2],["あまりない",1],["少しある",1],["ある",0],["かなりある",0],["評価不可",-1]]},
+  // ── 02 前頭葉（6）──
+  {r:"前頭葉",s:"背外側前頭前野",n:"数字読み起こし",d:"D4",mx:2,
+    opts:[["8桁以上",2],["7桁（合格ライン）",1],["6桁",1],["5桁",1],["4桁以下",0],["評価不可",-1]]},
+  {r:"前頭葉",s:"前頭眼野",n:"サッケード",d:"D4",mx:2,
+    opts:[["良好（両方向）",2],["片方向にエラー",1],["両方向にエラー",0],["評価不可",-1]]},
+  {r:"前頭葉",s:"前運動皮質",n:"グーチョキパー",d:"D4",mx:2,opts:[["良好",2],["右",1],["左",1],["両方",0],["評価不可",-1]]},
+  {r:"前頭葉",s:"背外側前頭前野",n:"ストループ",d:"D4",mx:2,
+    opts:[["10秒以下",2],["11〜25秒",1],["26秒以上",0],["評価不可",-1]]},
+  {r:"前頭葉",s:"前頭眼野",n:"パスート",d:"D4",mx:2,
+    opts:[["良好（両方向）",2],["片方向に課題",1],["両方向に課題",0],["評価不可",-1]]},
+  {r:"前頭葉",s:"眼窩前頭皮質",n:"匂い",d:"D4",mx:2,
+    opts:[["8回",2],["7回",2],["6回",1],["5回",1],["4回以下",0],["評価不可",-1]]},
+  // ── 03 小脳・前庭（6）──
+  {r:"小脳・前庭",s:"脊髄小脳",n:"ロンバーグ",d:"D5",mx:2,opts:[["良好",2],["右",1],["左",1],["評価不可",-1]]},
+  {r:"小脳・前庭",s:"脊髄小脳",n:"片脚",d:"D5",mx:2,
+    opts:[["良好（15秒以上）",2],["右",1],["左",1],["評価不可",-1]]},
+  {r:"小脳・前庭",s:"脊髄小脳",n:"タンデム",d:"D5",mx:2,
+    stepped:{dirs:[{l:"良好",s:2},{l:"右",s:null},{l:"左",s:null},{l:"評価不可",s:-1}],
+      degs:[{l:"やや偏る",s:1},{l:"大きく偏る",s:0}]}},
+  {r:"小脳・前庭",s:"脊髄小脳",n:"フクダ",d:"D5",mx:2,
+    stepped:{dirs:[{l:"良好（旋回30°未満）",s:2},{l:"右旋回",s:null},{l:"左旋回",s:null},{l:"評価不可",s:-1}],
+      degs:[{l:"やや偏る（30°〜45°程度）",s:1},{l:"大きく偏る（45°以上）",s:0}],
+      extras:["前方移動あり"]}},
+  {r:"小脳・前庭",s:"前庭小脳",n:"VOR",d:"D5",mx:2,
+    opts:[["良好（6半規管すべて）",2],["1〜2半規管にエラー",1],["3半規管以上にエラー",0],["評価不可",-1]]},
+  {r:"小脳・前庭",s:"大脳小脳",n:"パタパタ",d:"D5",mx:2,opts:[["良好",2],["右",1],["左",1],["両方",0],["評価不可",-1]]},
+  // ── 04 頭頂葉（2）──
+  {r:"頭頂葉",s:"体性感覚",n:"ボディマップ",d:"D7",mx:2,opts:[["良好",2],["右",1],["左",1],["両方",0],["評価不可",-1]]},
+  {r:"頭頂葉",s:"体性感覚",n:"指鼻",d:"D7",mx:2,opts:[["良好",2],["右",1],["左",1],["両方",0],["評価不可",-1]]},
+  // ── 05 側頭葉（3）──
+  {r:"側頭葉",s:"聴覚処理",n:"音マッピング",d:"D7",mx:2,opts:[["良好",2],["右",1],["左",1],["両方",0],["評価不可",-1]]},
+  {r:"側頭葉",s:"聴覚処理",n:"音叉チェック",d:"D7",mx:2,
+    opts:[["左右差2秒以内",2],["左右差5秒以内",1],["左右差5秒以上",0],["評価不可",-1]]},
+  {r:"側頭葉",s:"聴覚処理",n:"左右音",d:"D7",mx:2,opts:[["良好",2],["右",1],["左",1],["評価不可",-1]]},
+  // ── 06 後頭葉（2）──
+  {r:"後頭葉",s:"斜視・斜位",n:"カバー/アンカバーテスト",d:"D6",mx:2,
+    opts:[["良好",2],["斜位あり",1],["斜視あり",0],["評価不可",-1]]},
+  {r:"後頭葉",s:"周辺視",n:"周辺視",d:"D6",mx:2,
+    opts:[["良好（100°以上）",2],["90〜99°",1],["90°以下",0],["評価不可",-1]]},
+  // ── 07 大脳基底核（2）──
+  {r:"大脳基底核",s:"大脳基底核",n:"リズムテスト",d:"D9",mx:2,
+    opts:[["良好",2],["課題あり",1],["評価不可",-1]]},
+  {r:"大脳基底核",s:"大脳基底核",n:"10カウント",d:"D9",mx:2,
+    opts:[["良好（誤差0.5秒未満）",2],["1秒未満",1],["1.5秒以上",0],["評価不可",-1]]},
+  // ── 08 迷走神経（3）──
+  {r:"迷走神経",s:"自律神経末梢",n:"軟口蓋チェック",d:"D8",mx:2,
+    opts:[["良好",2],["片側",1],["両側",0],["評価不可",-1]]},
+  {r:"迷走神経",s:"自律神経末梢",n:"爪チェック",d:"D8",mx:2,
+    opts:[["良好",2],["片側",1],["両側",0],["評価不可",-1]]},
+  {r:"迷走神経",s:"自律神経末梢",n:"僧帽筋チェック",d:"D8",mx:2,
+    opts:[["良好",2],["片側",1],["両側",0],["評価不可",-1]]},
+  // ── 09 中脳（2）──
+  {r:"中脳",s:"中脳",n:"瞳孔反射",d:"D9",mx:2,opts:[["良好",2],["右",1],["左",1],["両方",0],["評価不可",-1]]},
+  {r:"中脳",s:"中脳",n:"輻輳",d:"D9",mx:2,opts:[["良好",2],["右",1],["左",1],["両方",0],["評価不可",-1]]},
+];
+// 合計 33種目
+
+// v8 領域配点（合計100点）— メソプレ p8 のバー順に定義
+const NOIC_DOMAINS_V8={
+  "原始反射":   {name:"原始反射（脳幹）", alloc:20,color:"#387ED3",bg:"#E3EEFB"},
+  "前頭葉":     {name:"前頭葉",          alloc:20,color:"#4EAB50",bg:"#E2EFDA"},
+  "小脳・前庭": {name:"小脳・前庭",      alloc:20,color:"#02ADB4",bg:"#DFF4F5"},
+  "頭頂葉":     {name:"頭頂葉",          alloc:6, color:"#FEB916",bg:"#FFF2CC"},
+  "側頭葉":     {name:"側頭葉",          alloc:8, color:"#9270D0",bg:"#E9E1F7"},
+  "後頭葉":     {name:"後頭葉",          alloc:8, color:"#F6685E",bg:"#FDE4E2"},
+  "大脳基底核": {name:"大脳基底核",      alloc:5, color:"#FC8A2B",bg:"#FEEBD9"},
+  "迷走神経":   {name:"迷走神経",        alloc:8, color:"#E26EAB",bg:"#FBE4F0"},
+  "中脳":       {name:"中脳",            alloc:5, color:"#57B5D7",bg:"#E2F2F9"},
+};
+// 合計: 20+20+20+6+8+8+5+8+5 = 100点
+
+// D4-D10 の脳スコア配点（脳アセス60点分）— バージョンで異なる
+const NOIC_D_WEIGHTS_V6={D4:11,D5:13,D6:7,D7:6,D8:6,D9:5,D10:12};
+const NOIC_D_WEIGHTS_V8={D4:12,D5:12,D6:5,D7:8,D8:5,D9:6,D10:12};
+
+// v8 の適用開始バージョン
+const NOIC_V8_MIN_SCHEMA=4;
+function isNoicV8(ver){ return (ver||1) >= NOIC_V8_MIN_SCHEMA; }
+
+// 領域 → D4-D10 マッピング（バージョン別）
+const NOIC_AREA_TO_D_V6={
+  "前頭葉":"D4","小脳":"D5","後頭葉":"D6","頭頂葉":"D7","側頭葉":"D7",
+  "島皮質":"D8","迷走神経":"D8","大脳基底核・中脳":"D9","原始反射":"D10"
+};
+const NOIC_AREA_TO_D_V8={
+  "前頭葉":"D4","小脳・前庭":"D5","後頭葉":"D6","頭頂葉":"D7","側頭葉":"D7",
+  "迷走神経":"D8","大脳基底核":"D9","中脳":"D9","原始反射":"D10"
+};
+const NOIC_D_LABELS_V6={
+  D4:"前頭葉・実行機能",D5:"小脳・前庭",D6:"ビジョン・眼位",
+  D7:"感覚統合（頭頂+側頭）",D8:"自律神経末梢（島皮質+迷走神経）",
+  D9:"大脳基底核・中脳",D10:"原始反射"
+};
+const NOIC_D_LABELS_V8={
+  D4:"前頭葉・実行機能",D5:"小脳・前庭",D6:"ビジョン・眼位",
+  D7:"感覚統合（頭頂+側頭）",D8:"自律神経末梢（迷走神経）",
+  D9:"大脳基底核・中脳",D10:"原始反射"
+};
+function areaToDFor(ver){ return isNoicV8(ver) ? NOIC_AREA_TO_D_V8 : NOIC_AREA_TO_D_V6; }
+function dLabelsFor(ver){ return isNoicV8(ver) ? NOIC_D_LABELS_V8 : NOIC_D_LABELS_V6; }
+function schemaTag(ver){ return isNoicV8(ver) ? "v8" : "v6"; }
+
+
+// v8（33種目・9領域）を 2026-08-20 から適用。既存ゲストは schemaVer が据え置かれるため影響しない
+const CURRENT_SCHEMA=4;
 
 function guestType(gid){ return (store.guests[gid]||{}).type||"noic"; }
 function currentType(){ return guestType(currentGid); }
 function getItemsFor(type,ver){
   const v=ver||1;
+  // NOIC は schemaVer>=4 で 33種目(v8) に切り替える。既存ゲストは 62種目のまま（縦断比較を維持）
+  if(type!=="resync" && isNoicV8(v)) return NOIC_ITEMS_V8;
   const all=type==="resync"?RESYNC_ITEMS:NOIC_ITEMS;
   return all.filter(it=>{
     if(it.minVer&&v<it.minVer)return false;
@@ -623,9 +751,13 @@ function getItemsFor(type,ver){
     return true;
   });
 }
-function getDomainsFor(type){ return type==="resync"?RESYNC_DOMAINS:NOIC_DOMAINS; }
+function getDomainsFor(type,ver){
+  if(type==="resync") return RESYNC_DOMAINS;
+  return isNoicV8(ver) ? NOIC_DOMAINS_V8 : NOIC_DOMAINS;
+}
+function dWeightsFor(type,ver){ return isNoicV8(ver) ? NOIC_D_WEIGHTS_V8 : NOIC_D_WEIGHTS_V6; }
 function curItems(){const g=store.guests[currentGid];return getItemsFor(currentType(),g?g.schemaVer:1);}
-function curDomains(){ return getDomainsFor(currentType()); }
+function curDomains(){const g=store.guests[currentGid];return getDomainsFor(currentType(),g?g.schemaVer:1);}
 function curMaxScore(){ return 100; }  // NOIC v6 で100点満点化（resync同様）
 function typeLabel(type){ return type==="resync"?"resync":"NOIC"; }
 
@@ -1599,11 +1731,10 @@ function updateScoreBar(){
   const v6El=document.getElementById("v6DomainScores");
   const v6TotalEl=document.getElementById("v6TotalLabel");
   if(gt==="noic"&&v6El){
-    const V6_AREA_TO_DOMAIN={
-      "前頭葉":"D4","小脳":"D5","後頭葉":"D6","頭頂葉":"D7","側頭葉":"D7",
-      "島皮質":"D8","迷走神経":"D8","大脳基底核・中脳":"D9","原始反射":"D10"
-    };
-    const V6_WEIGHTS={D4:11,D5:13,D6:7,D7:6,D8:6,D9:5,D10:12};
+    const _ver=g.schemaVer;
+    const V6_AREA_TO_DOMAIN=areaToDFor(_ver);
+    const V6_WEIGHTS=dWeightsFor(gt,_ver);
+    const _tag=schemaTag(_ver);
     const V6_LABELS={D4:"前頭",D5:"小脳",D6:"視覚",D7:"感統",D8:"自律",D9:"基底",D10:"反射"};
     const V6_COLORS={D4:"#5B9BD5",D5:"#70AD47",D6:"#7030A0",D7:"#FFC000",D8:"#888888",D9:"#00897B",D10:"#AD1457"};
     const v6Raw={D4:0,D5:0,D6:0,D7:0,D8:0,D9:0,D10:0};
@@ -1620,10 +1751,10 @@ function updateScoreBar(){
       const raw=v6Raw[v6d],max=v6Max[v6d],w=V6_WEIGHTS[v6d];
       const pt=max>0?(raw/max*w):0;
       v6Total+=pt;
-      return`<div class="domain-pill" style="border-left:3px solid ${V6_COLORS[v6d]};font-size:10px;padding:2px 6px"><span style="font-size:8px;color:#888">v6</span> ${v6d}${V6_LABELS[v6d]} <strong>${pt.toFixed(1)}</strong>/${w}</div>`;
+      return`<div class="domain-pill" style="border-left:3px solid ${V6_COLORS[v6d]};font-size:10px;padding:2px 6px"><span style="font-size:8px;color:#888">${_tag}</span> ${v6d}${V6_LABELS[v6d]} <strong>${pt.toFixed(1)}</strong>/${w}</div>`;
     });
     v6El.innerHTML=pills.join("");
-    if(v6TotalEl)v6TotalEl.textContent=`v6: ${v6Total.toFixed(1)}/60`;
+    if(v6TotalEl)v6TotalEl.textContent=`${_tag}: ${v6Total.toFixed(1)}/60`;
   } else if(v6El){
     v6El.innerHTML="";
     if(v6TotalEl)v6TotalEl.textContent="";
@@ -1953,7 +2084,7 @@ function mdTableCell(s){
 function generateMarkdown(g,a){
   const gt=g.type||"noic";
   const items=getItemsFor(gt,g.schemaVer);
-  const domains=getDomainsFor(gt);
+  const domains=getDomainsFor(gt,g.schemaVer);
   const maxScore=100;  // NOIC v6 で100点満点化
   const brandLabel=typeLabel(gt);
   calcScores(a,items,domains);
@@ -1992,16 +2123,11 @@ function generateMarkdown(g,a){
 
   // ── NOIC v6 D4-D10 配点（脳スコア用・60点満点） ──
   if(gt==="noic"){
-    const V6_AREA_TO_DOMAIN={
-      "前頭葉":"D4","小脳":"D5","後頭葉":"D6","頭頂葉":"D7","側頭葉":"D7",
-      "島皮質":"D8","迷走神経":"D8","大脳基底核・中脳":"D9","原始反射":"D10"
-    };
-    const V6_WEIGHTS={D4:11,D5:13,D6:7,D7:6,D8:6,D9:5,D10:12};
-    const V6_LABELS={
-      D4:"前頭葉・実行機能",D5:"小脳・前庭",D6:"ビジョン・眼位",
-      D7:"感覚統合（頭頂+側頭）",D8:"自律神経末梢（島皮質+迷走神経）",
-      D9:"大脳基底核・中脳",D10:"原始反射"
-    };
+    const _ver=g.schemaVer;
+    const _tag=schemaTag(_ver);
+    const V6_AREA_TO_DOMAIN=areaToDFor(_ver);
+    const V6_WEIGHTS=dWeightsFor(gt,_ver);
+    const V6_LABELS=dLabelsFor(_ver);
     // 領域別素点をD4-D10に集約
     const v6Raw={D4:0,D5:0,D6:0,D7:0,D8:0,D9:0,D10:0};
     const v6Max={D4:0,D5:0,D6:0,D7:0,D8:0,D9:0,D10:0};
@@ -2012,7 +2138,7 @@ function generateMarkdown(g,a){
       v6Raw[v6d]+=s.raw;
       v6Max[v6d]+=s.max;
     }
-    L.push("## NOIC v6 D4-D10 配点（脳スコア用・60点満点）\n");
+    L.push(`## NOIC ${_tag} D4-D10 配点（脳スコア用・60点満点）\n`);
     L.push("| ドメイン | 名称 | 素点 | 満点 | 達成率 | 配点 | 換算点 |");
     L.push("|---|---|---|---|---|---|---|");
     let v6Total=0;
@@ -2025,7 +2151,7 @@ function generateMarkdown(g,a){
     }
     L.push(`| **合計** | **脳アセス由来** | | | | **60** | **${v6Total.toFixed(2)}** |`);
     L.push("");
-    L.push("※ Python `noic_brain_score_v6.py` で D1-D3（脳波由来 40点）と合算し、整合性ボーナス・シグモイド変換・切り捨てを適用して総合スコアを算出。\n");
+    L.push(`※ Python \`noic_brain_score_${_tag}.py\` で D1-D3（脳波由来 40点）と合算し、整合性ボーナス・シグモイド変換・切り捨てを適用して総合スコアを算出。\n`);
   }
 
   let curRegion="";
